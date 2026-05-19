@@ -25,6 +25,8 @@ const COMPUTE_ROUTES_FIELD_MASK = [
   "routes.legs.steps.staticDuration",
   "routes.legs.steps.startLocation",
   "routes.legs.steps.endLocation",
+  "routes.legs.steps.transitDetails",
+  "routes.legs.localizedValues",
   "routes.legs.polyline",
   "routes.optimizedIntermediateWaypointIndex",
 ].join(",");
@@ -191,8 +193,51 @@ export class RoutesService {
     const totalDistanceMeters = route.distanceMeters || 0;
     const totalDurationSeconds = parseDuration(route.duration);
 
+    // Format transit details from steps
+    function formatTransitStep(step: any): any {
+      const td = step.transitDetails;
+      if (!td) return null;
+      return {
+        line: td.transitLine?.nameShort || td.transitLine?.name || "",
+        line_full: td.transitLine?.name || "",
+        headsign: td.headsign || "",
+        agency: td.transitLine?.agencies?.[0]?.name || td.transitLine?.agencies?.[0]?.displayName || "",
+        stop_count: td.stopCount || 0,
+        departure_stop: td.departureStop?.name || "",
+        arrival_stop: td.arrivalStop?.name || "",
+        departure_time: td.departureTime?.time?.text || td.localizedValues?.departureTime?.text || "",
+        arrival_time: td.arrivalTime?.time?.text || td.localizedValues?.arrivalTime?.text || "",
+      };
+    }
+
+    // Build enriched route legs with transit step details
+    const enrichedRoutes = data.routes.map((r: any) => ({
+      ...r,
+      legs: (r.legs || []).map((leg: any) => ({
+        ...leg,
+        steps: (leg.steps || []).map((step: any) => {
+          const transitInfo = formatTransitStep(step);
+          return {
+            ...step,
+            ...(transitInfo ? { transit_details: transitInfo } : {}),
+          };
+        }),
+      })),
+    }));
+
+    // Extract arrival/departure times from localizedValues or leg data
+    const firstLeg = route.legs?.[0];
+    const lastLeg = route.legs?.[route.legs.length - 1];
+
+    const departureTime =
+      firstLeg?.localizedValues?.departureTime?.text ||
+      (params.departureTime ? params.departureTime.toISOString() : "");
+    const arrivalTime =
+      lastLeg?.localizedValues?.arrivalTime?.text ||
+      (params.arrivalTime ? params.arrivalTime.toISOString() : "");
+
     return {
-      routes: data.routes,
+      routes: enrichedRoutes,
       summary: route.description || "",
       total_distance: {
         value: totalDistanceMeters,
@@ -202,8 +247,8 @@ export class RoutesService {
         value: totalDurationSeconds,
         text: formatDuration(totalDurationSeconds),
       },
-      arrival_time: "",
-      departure_time: "",
+      arrival_time: arrivalTime || "",
+      departure_time: departureTime || "",
       ...(route.optimizedIntermediateWaypointIndex
         ? { optimizedIntermediateWaypointIndex: route.optimizedIntermediateWaypointIndex }
         : {}),
