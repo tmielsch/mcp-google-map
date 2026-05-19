@@ -1,11 +1,18 @@
+# Docker Compose for tmielsch/mcp-google-map (fix/transit-details branch)
+# 
+# Deployment:
+#   1. Clone the fork: git clone -b fix/transit-details https://github.com/tmielsch/mcp-google-map.git
+#   2. cd into it, put this file and .env there
+#   3. docker compose up -d --build
+#
+# To update after code changes:
+#   git pull && docker compose up -d --build
+
 services:
   mcp-google-map:
     build:
-      context: https://github.com/tmielsch/mcp-google-map.git#fix/transit-details
+      context: .
       dockerfile: Dockerfile.fork
-      # Falls Docker den context nicht vom Git klappt, lokale Alternative:
-      # context: ./mcp-google-map
-      # dockerfile: Dockerfile.fork
     container_name: mcp-google-map
     environment:
       - GOOGLE_MAPS_API_KEY=${GOOGLE_MAPS_API_KEY}
