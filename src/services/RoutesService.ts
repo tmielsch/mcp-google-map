@@ -26,6 +26,7 @@ const COMPUTE_ROUTES_FIELD_MASK = [
   "routes.legs.steps.startLocation",
   "routes.legs.steps.endLocation",
   "routes.legs.steps.transitDetails",
+  "routes.legs.steps.localizedValues",
   "routes.legs.localizedValues",
   "routes.legs.polyline",
   "routes.optimizedIntermediateWaypointIndex",
@@ -197,16 +198,22 @@ export class RoutesService {
     function formatTransitStep(step: any): any {
       const td = step.transitDetails;
       if (!td) return null;
+      // Google Routes API: stopDetails.departureStop/arrivalStop (not flat)
+      const sd = td.stopDetails || {};
+      const ds = sd.departureStop || td.departureStop || {};
+      const as = sd.arrivalStop || td.arrivalStop || {};
+      // Times: step.localizedValues has departureTime/arrivalTime
+      const slv = step.localizedValues || {};
       return {
         line: td.transitLine?.nameShort || td.transitLine?.name || "",
         line_full: td.transitLine?.name || "",
         headsign: td.headsign || "",
         agency: td.transitLine?.agencies?.[0]?.name || td.transitLine?.agencies?.[0]?.displayName || "",
         stop_count: td.stopCount || 0,
-        departure_stop: td.departureStop?.name || "",
-        arrival_stop: td.arrivalStop?.name || "",
-        departure_time: td.departureTime?.time?.text || td.localizedValues?.departureTime?.text || "",
-        arrival_time: td.arrivalTime?.time?.text || td.localizedValues?.arrivalTime?.text || "",
+        departure_stop: ds.name || "",
+        arrival_stop: as.name || "",
+        departure_time: slv.departureTime?.text || td.departureTime?.time?.text || "",
+        arrival_time: slv.arrivalTime?.text || td.arrivalTime?.time?.text || "",
       };
     }
 
@@ -228,17 +235,26 @@ export class RoutesService {
     }));
 
     // Extract arrival/departure times
-    // Try leg-level localizedValues first, then step-level (for transit), then fallback
+    // For transit routes: times come from step-level localizedValues on transit steps
+    // For non-transit: times may be on leg-level localizedValues
     const firstLeg = route.legs?.[0];
     const lastLeg = route.legs?.[route.legs.length - 1];
 
+    // Find first transit step for departure time, last transit step for arrival time
+    const allSteps = firstLeg?.steps || [];
+    const transitSteps = allSteps.filter((s: any) => s.transitDetails);
+    const lastLegSteps = lastLeg?.steps || [];
+    const lastLegTransitSteps = lastLegSteps.filter((s: any) => s.transitDetails);
+
     const departureTime =
       firstLeg?.localizedValues?.departureTime?.text ||
-      firstLeg?.steps?.[0]?.localizedValues?.departureTime?.text ||
+      (transitSteps[0]?.localizedValues?.departureTime?.text) ||
+      (allSteps[0]?.localizedValues?.departureTime?.text) ||
       (params.departureTime ? params.departureTime.toISOString() : "");
     const arrivalTime =
       lastLeg?.localizedValues?.arrivalTime?.text ||
-      lastLeg?.steps?.[lastLeg.steps.length - 1]?.localizedValues?.arrivalTime?.text ||
+      (lastLegTransitSteps[lastLegTransitSteps.length - 1]?.localizedValues?.arrivalTime?.text) ||
+      (lastLegSteps[lastLegSteps.length - 1]?.localizedValues?.arrivalTime?.text) ||
       (params.arrivalTime ? params.arrivalTime.toISOString() : "");
 
     return {
