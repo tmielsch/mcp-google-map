@@ -198,23 +198,23 @@ export class RoutesService {
     function formatTransitStep(step: any): any {
       const td = step.transitDetails;
       if (!td) return null;
-      // Google Routes API: stopDetails.departureStop/arrivalStop (not flat)
+      // Stop names from stopDetails (Google Routes API v2 structure)
       const sd = td.stopDetails || {};
-      const ds = sd.departureStop || td.departureStop || {};
-      const as = sd.arrivalStop || td.arrivalStop || {};
-      // Times come from stopDetails.stop.arrivalTime/departureTime.time.text
-      // or from step-level localizedValues as fallback
-      const slv = step.localizedValues || {};
+      const depStop = sd.departureStop || {};
+      const arrStop = sd.arrivalStop || {};
+      // Formatted times from transitDetails.localizedValues (e.g. "22:01")
+      // ISO times from stopDetails (e.g. "2026-05-19T20:01:00Z")
+      const tlv = td.localizedValues || {};
       return {
         line: td.transitLine?.nameShort || td.transitLine?.name || "",
         line_full: td.transitLine?.name || "",
         headsign: td.headsign || "",
         agency: td.transitLine?.agencies?.[0]?.name || td.transitLine?.agencies?.[0]?.displayName || "",
         stop_count: td.stopCount || 0,
-        departure_stop: ds.name || "",
-        arrival_stop: as.name || "",
-        departure_time: ds.departureTime?.time?.text || slv.departureTime?.text || "",
-        arrival_time: as.arrivalTime?.time?.text || slv.arrivalTime?.text || "",
+        departure_stop: depStop.name || "",
+        arrival_stop: arrStop.name || "",
+        departure_time: tlv.departureTime?.time?.text || sd.departureTime || "",
+        arrival_time: tlv.arrivalTime?.time?.text || sd.arrivalTime || "",
       };
     }
 
@@ -236,26 +236,28 @@ export class RoutesService {
     }));
 
     // Extract arrival/departure times
-    // For transit routes: times come from step-level localizedValues on transit steps
-    // For non-transit: times may be on leg-level localizedValues
+    // For transit: times from transitDetails.localizedValues on first/last transit step
+    // For non-transit: times from leg-level localizedValues
     const firstLeg = route.legs?.[0];
     const lastLeg = route.legs?.[route.legs.length - 1];
 
-    // Find first transit step for departure time, last transit step for arrival time
     const allSteps = firstLeg?.steps || [];
     const transitSteps = allSteps.filter((s: any) => s.transitDetails);
     const lastLegSteps = lastLeg?.steps || [];
     const lastLegTransitSteps = lastLegSteps.filter((s: any) => s.transitDetails);
 
+    const firstTransit = transitSteps[0]?.transitDetails;
+    const lastTransit = lastLegTransitSteps[lastLegTransitSteps.length - 1]?.transitDetails;
+
     const departureTime =
       firstLeg?.localizedValues?.departureTime?.text ||
-      (transitSteps[0]?.localizedValues?.departureTime?.text) ||
-      (allSteps[0]?.localizedValues?.departureTime?.text) ||
+      (firstTransit?.localizedValues?.departureTime?.time?.text) ||
+      (firstTransit?.stopDetails?.departureTime) ||
       (params.departureTime ? params.departureTime.toISOString() : "");
     const arrivalTime =
       lastLeg?.localizedValues?.arrivalTime?.text ||
-      (lastLegTransitSteps[lastLegTransitSteps.length - 1]?.localizedValues?.arrivalTime?.text) ||
-      (lastLegSteps[lastLegSteps.length - 1]?.localizedValues?.arrivalTime?.text) ||
+      (lastTransit?.localizedValues?.arrivalTime?.time?.text) ||
+      (lastTransit?.stopDetails?.arrivalTime) ||
       (params.arrivalTime ? params.arrivalTime.toISOString() : "");
 
     return {
