@@ -217,23 +217,28 @@ export class RoutesService {
         ...leg,
         steps: (leg.steps || []).map((step: any) => {
           const transitInfo = formatTransitStep(step);
+          // Remove raw transitDetails from API to avoid duplicate/empty keys
+          const { transitDetails, ...stepWithoutTransit } = step;
           return {
-            ...step,
+            ...stepWithoutTransit,
             ...(transitInfo ? { transit_details: transitInfo } : {}),
           };
         }),
       })),
     }));
 
-    // Extract arrival/departure times from localizedValues or leg data
+    // Extract arrival/departure times
+    // Try leg-level localizedValues first, then step-level (for transit), then fallback
     const firstLeg = route.legs?.[0];
     const lastLeg = route.legs?.[route.legs.length - 1];
 
     const departureTime =
       firstLeg?.localizedValues?.departureTime?.text ||
+      firstLeg?.steps?.[0]?.localizedValues?.departureTime?.text ||
       (params.departureTime ? params.departureTime.toISOString() : "");
     const arrivalTime =
       lastLeg?.localizedValues?.arrivalTime?.text ||
+      lastLeg?.steps?.[lastLeg.steps.length - 1]?.localizedValues?.arrivalTime?.text ||
       (params.arrivalTime ? params.arrivalTime.toISOString() : "");
 
     return {
