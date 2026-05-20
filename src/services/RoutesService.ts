@@ -202,7 +202,8 @@ export class RoutesService {
       const sd = td.stopDetails || {};
       const ds = sd.departureStop || td.departureStop || {};
       const as = sd.arrivalStop || td.arrivalStop || {};
-      // Times: step.localizedValues has departureTime/arrivalTime
+      // Times come from stopDetails.stop.arrivalTime/departureTime.time.text
+      // or from step-level localizedValues as fallback
       const slv = step.localizedValues || {};
       return {
         line: td.transitLine?.nameShort || td.transitLine?.name || "",
@@ -212,8 +213,8 @@ export class RoutesService {
         stop_count: td.stopCount || 0,
         departure_stop: ds.name || "",
         arrival_stop: as.name || "",
-        departure_time: slv.departureTime?.text || td.departureTime?.time?.text || "",
-        arrival_time: slv.arrivalTime?.text || td.arrivalTime?.time?.text || "",
+        departure_time: ds.departureTime?.time?.text || slv.departureTime?.text || "",
+        arrival_time: as.arrivalTime?.time?.text || slv.arrivalTime?.text || "",
       };
     }
 
